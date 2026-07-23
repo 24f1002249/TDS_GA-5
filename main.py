@@ -17,6 +17,7 @@ import os
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 # ---------------------------------------------------------------------------
 # Config
@@ -60,7 +61,19 @@ class HeaderCaptureMiddleware:
 
 # stateless_http=True: every HTTP request is handled independently, which
 # is the simplest and most robust mode for a small public exam endpoint.
-mcp = FastMCP("exam-mcp-server", stateless_http=True)
+#
+# The SDK's default DNS-rebinding protection only allows Host headers of
+# "localhost"/"127.0.0.1", which rejects every request once this is
+# deployed behind a public hostname (e.g. onrender.com). This is a public,
+# unauthenticated exam endpoint by design, so that protection is disabled
+# here rather than trying to allowlist Render's exact hostname.
+mcp = FastMCP(
+    "exam-mcp-server",
+    stateless_http=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
 
 
 @mcp.tool()
