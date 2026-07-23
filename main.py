@@ -101,4 +101,13 @@ app = HeaderCaptureMiddleware(mcp.streamable_http_app())
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
+    print("=" * 60, flush=True)
+    print("STARTUP MARKER: main.py v2 (dns-rebinding protection OFF)", flush=True)
+    print(
+        f"transport_security.enable_dns_rebinding_protection = "
+        f"{mcp.settings.transport_security.enable_dns_rebinding_protection}",
+        flush=True,
+    )
+    print(f"binding to 0.0.0.0:{port}", flush=True)
+    print("=" * 60, flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port)
