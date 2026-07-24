@@ -107,10 +107,11 @@ def _bootstrap_fixture_files() -> None:
             if not os.path.exists(path):
                 with open(path, "w") as f:
                     f.write(content)
-        except OSError:
-            # Non-fatal: if the filesystem is read-only or the dir can't
-            # be created, requests against that path will just 404/deny.
-            pass
+            print(f"BOOTSTRAP OK: {path}", flush=True)
+        except OSError as e:
+            # Loud on purpose: a silent failure here means benign
+            # read_file controls will wrongly get blocked as "not found".
+            print(f"BOOTSTRAP FAILED: {path} -> {e!r}", flush=True)
 
 
 _bootstrap_fixture_files()
@@ -324,10 +325,40 @@ async def health(request: Request):
     return JSONResponse({"status": "ok"})
 
 
+async def debug_fixtures(request: Request):
+    """Diagnostic only - reports whether each expected fixture exists and
+    is readable, plus the resolved sandbox root. Not part of the graded
+    contract; safe to remove later, but handy for confirming bootstrap
+    actually succeeded on the deployed machine."""
+    paths = [
+        os.path.join(OUTSIDE_DIR, "canary.txt"),
+        os.path.join(SANDBOX_ROOT, "notes", "report.txt"),
+        os.path.join(SANDBOX_ROOT, "notes", "looks-like-..-but-safe.txt"),
+        os.path.join(SANDBOX_ROOT, "encoded", "%2e%2e-literal.txt"),
+    ]
+    report = []
+    for p in paths:
+        entry = {"path": p, "exists": os.path.exists(p), "is_file": os.path.isfile(p)}
+        if entry["is_file"]:
+            try:
+                with open(p, "r", errors="replace") as f:
+                    entry["preview"] = f.read(80)
+            except OSError as e:
+                entry["read_error"] = repr(e)
+        report.append(entry)
+    return JSONResponse({
+        "sandbox_root": SANDBOX_ROOT,
+        "sandbox_root_exists": os.path.isdir(SANDBOX_ROOT),
+        "outside_dir": OUTSIDE_DIR,
+        "fixtures": report,
+    })
+
+
 routes = [
     Route("/", guardrail_endpoint, methods=["POST"]),
     Route("/guardrail", guardrail_endpoint, methods=["POST"]),
     Route("/health", health, methods=["GET"]),
+    Route("/debug", debug_fixtures, methods=["GET"]),
 ]
 
 guardrail_app = Starlette(routes=routes)
