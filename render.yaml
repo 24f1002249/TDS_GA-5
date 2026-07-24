@@ -1,10 +1,9 @@
 services:
   - type: web
     name: exam-mcp-server
-    env: python
+    env: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: EXAM_EMAIL
         value: 24f1002249@ds.study.iitm.ac.in
