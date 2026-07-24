@@ -452,7 +452,7 @@ routes = [
           methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]),
 ]
 
-guardrail_app = Starlette(routes=routes, redirect_slashes=False)
+guardrail_app = Starlette(routes=routes)
 
 # mcp.streamable_http_app() is itself a full Starlette app that expects
 # requests at its own internal path (/mcp by default). Nesting it behind
