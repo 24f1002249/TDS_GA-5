@@ -25,7 +25,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Route
 
 # ===========================================================================
 # Part 1: existing MCP server (unchanged logic, just mounted at /mcp below)
@@ -328,11 +328,38 @@ routes = [
     Route("/", guardrail_endpoint, methods=["POST"]),
     Route("/guardrail", guardrail_endpoint, methods=["POST"]),
     Route("/health", health, methods=["GET"]),
-    Mount("/mcp", app=mcp.streamable_http_app()),
 ]
 
-starlette_app = Starlette(routes=routes)
-app = HeaderCaptureMiddleware(starlette_app)
+guardrail_app = Starlette(routes=routes)
+
+# mcp.streamable_http_app() is itself a full Starlette app that expects
+# requests at its own internal path (/mcp by default). Nesting it behind
+# Starlette's Mount("/mcp", ...) strips that prefix before forwarding,
+# so the inner app sees an empty path and tries to redirect back to
+# "/mcp" - which, combined with the outer mount prefix, resolves to
+# "/mcp/mcp" and breaks MCP clients that refuse to follow redirects.
+# Dispatching manually and passing the original path through unchanged
+# avoids that double-prefix bug entirely.
+mcp_app = mcp.streamable_http_app()
+
+
+class CombinedApp:
+    def __init__(self, mcp_app, guardrail_app):
+        self.mcp_app = mcp_app
+        self.guardrail_app = guardrail_app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            # FastMCP's stateless session manager needs the lifespan
+            # events; the guardrail app has no lifespan needs of its own.
+            await self.mcp_app(scope, receive, send)
+        elif scope["type"] == "http" and scope["path"].startswith("/mcp"):
+            await self.mcp_app(scope, receive, send)
+        else:
+            await self.guardrail_app(scope, receive, send)
+
+
+app = HeaderCaptureMiddleware(CombinedApp(mcp_app, guardrail_app))
 
 
 if __name__ == "__main__":
